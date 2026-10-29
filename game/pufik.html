@@ -74,7 +74,8 @@
     font-size: 13px; font-weight: 900; line-height: 15px; padding: 0 6px; border: 2px solid; border-radius: 999px; opacity: .5;
   }
   .sel { -webkit-user-select: all; user-select: all; overflow-wrap: anywhere; }
-  p .sel { display: block; word-break: break-all; } /* the policy URL: a break after one of its hyphens would read as word hyphenation */
+  p .sel { display: block; word-break: break-all; } /* the policy URL breaks anywhere but after a hyphen: aboutApp() glues each «-» to the next character */
+  .nb { white-space: nowrap; }
   @supports not (height: 1dvh) { html.app .sheet { max-height: calc(100vh - 32px); } } /* WebView < 108, e.g. on Huawei (Capacitor checks no Chromium version there): the menu still scrolls */
 
   /* parent menu: ordinary readable form, this is for grown-ups */
@@ -107,11 +108,12 @@
   .swatch { width: 38px; height: 38px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 0 2px var(--line); cursor: pointer; padding: 0; }
   .swatch[aria-pressed=true] { box-shadow: 0 0 0 3px var(--ink); }
   .stats { width: 100%; border-collapse: collapse; }
-  .stats th, .stats td { text-align: center; padding: 5px 2px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+  /* seven columns: the font follows the screen width, so the table fits the sheet down to a 280 px phone (the sheet only pans up and down) */
+  .stats th, .stats td { text-align: center; padding: 5px 1px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; font-size: clamp(11px, 3.9vw, 16px); }
   .stats th:first-child, .stats td:first-child { text-align: left; }
   .gate { text-align: center; display: grid; gap: 12px; }
   .gate .sum { font-size: 40px; font-weight: 900; font-variant-numeric: tabular-nums; }
-  .keys { display: grid; grid-template-columns: repeat(3, 72px); gap: 10px; justify-content: center; }
+  .keys { display: grid; grid-template-columns: repeat(3, minmax(0, 72px)); gap: 10px; justify-content: center; } /* keys shrink only below a 308 px screen */
   .keys button { height: 60px; border-radius: 16px; border: 2px solid var(--line); background: var(--soft); font: inherit; font-size: 26px; font-weight: 900; cursor: pointer; color: var(--ink); }
   .debug {
     position: fixed; left: 50%; transform: translateX(-50%); bottom: 4px; z-index: 5;
@@ -505,6 +507,15 @@ const Store = (() => {
   function read(key) {
     try { const raw = localStorage.getItem(key); if (!raw) return null; const d = JSON.parse(raw); return d && typeof d === 'object' && d.v ? d : null; } catch (e) { return null; }
   }
+  // statistics stay for today and the 13 days before, as the privacy policy says (not the last 14 days played); a day
+  // after today is left from a clock that was wrong and goes too. Every save prunes, so older statistics never stay on
+  // the device or go into a transfer code, even before the first stat() of a session
+  function pruneStats(s) {
+    if (!s.stats || typeof s.stats !== 'object') return;
+    const today = dayKey(), from = new Date(); from.setDate(from.getDate() - 13);
+    const cut = dayKey(from.getTime());
+    for (const k of Object.keys(s.stats)) if (k < cut || k > today) delete s.stats[k];
+  }
   let timer = null, lastBak = 0;
   const St = {
     defaults,
@@ -518,6 +529,7 @@ const Store = (() => {
     saveNow() {
       clearTimeout(timer); timer = null;
       try {
+        pruneStats(S);
         const raw = JSON.stringify(S);
         localStorage.setItem(KEY, raw);
         if (Date.now() - lastBak > 10 * MIN) { localStorage.setItem(BAK, raw); lastBak = Date.now(); }
@@ -624,12 +636,7 @@ function stat(key, n) {
   const d = dayKey();
   const st = S.stats[d] || (S.stats[d] = { min: 0, feed: 0, bath: 0, sleep: 0, play: 0 });
   st[key] = (st[key] || 0) + (n || 1);
-  // keep two weeks: today and the 13 days before, as the privacy policy says (not the last 14 days played);
-  // a day after today is left from a clock that was wrong and goes too
-  const from = new Date(); from.setDate(from.getDate() - 13);
-  const cut = dayKey(from.getTime());
-  for (const k of Object.keys(S.stats)) if (k < cut || k > d) delete S.stats[k];
-  Store.dirty();
+  Store.dirty(); // the save keeps two weeks of statistics (pruneStats)
 }
 
 // ---------- the pet drawing (vector, layered so faces are just eye + mouth combos) ----------
@@ -4341,7 +4348,7 @@ function renderParent() {
     <div class="row"><span>Музыка</span><input type="range" id="pMus" min="0" max="100" value="${Math.round(st.music * 100)}"></div>
     <div class="row"><span>Вибрация</span><input type="checkbox" id="pVib" ${st.vibrate ? 'checked' : ''}></div>
     <h3>Последние 7 дней</h3>
-    <table class="stats"><tr><th>День</th><th>Мин</th><th>Еда</th><th>Купание</th><th>Сон</th><th>Игры</th><th>Туалет</th></tr>
+    <table class="stats"><tr><th>День</th><th>Мин</th><th>Еда</th><th>Ванна</th><th>Сон</th><th>Игры</th><th>Туалет</th></tr>
     ${days.map(d => { const s = S.stats[d] || {}; return `<tr><td>${d.slice(8)}.${d.slice(5, 7)}</td><td>${s.min || 0}</td><td>${s.feed || 0}</td><td>${s.bath || 0}</td><td>${s.sleep || 0}</td><td>${s.play || 0}</td><td>${s.potty || 0}</td></tr>`; }).join('')}</table>
     <h3>Перенос на другое устройство</h3>
     <p class="muted">Питомец живёт ${K.app ? 'в этом приложении' : 'в этом браузере'}. Чтобы перенести его, нажмите «Показать код», отправьте код себе (например, в мессенджер) и на другом устройстве нажмите «Ввести код». Питомец там заменится этим.</p>
@@ -4396,9 +4403,12 @@ function renderParent() {
 function aboutApp() {
   const v = k => { try { const x = window.PUFIK_APP[k]; return typeof x === 'string' || typeof x === 'number' ? esc(String(x).trim()) : ''; } catch (e) { return ''; } };
   const row = (t, x, c) => x ? `<div class="row"><span>${t}</span><b${c ? ` class="${c}"` : ''}>${x}</b></div>` : '';
+  // a line that ends in «-» reads as word hyphenation and the address gets typed without it; break-all still lets a line
+  // break before a hyphen or between letters. The spans leave the selected and copied text as it is
+  const url = v('privacyUrl').replace(/-+(?:&#?\w+;|.)/gu, '<span class="nb">$&</span>');
   return `<h3>О приложении</h3>${row('Название', v('appName'))}${row('Версия', v('version'))}${row('Разработчик', v('developer'))}${row('Почта', v('email'), 'sel')}${row('Возрастная категория', '0+')}
     <p class="muted">Игра не собирает и никуда не передаёт данные. Питомец и рисунки хранятся только на этом устройстве и удаляются вместе с приложением. В игре нет рекламы и покупок.</p>
-    ${v('privacyUrl') ? `<p class="muted">Политика конфиденциальности: <span class="sel">${v('privacyUrl')}</span></p>` : ''}
+    ${url ? `<p class="muted">Политика конфиденциальности: <span class="sel">${url}</span></p>` : ''}
     <p class="muted">Шрифты Nunito и Noto Color Emoji — лицензия SIL Open Font License 1.1.</p>`;
 }
 function resetRuntime() {

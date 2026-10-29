@@ -369,7 +369,7 @@ License 1.1, текст лицензии — `fonts/OFL-NotoColorEmoji.txt`), у
 
 ### Название и данные разработчика
 
-Название приложения стоит в семи местах, и менять его нужно сразу везде (и в карточке RuStore, раздел 4):
+Название приложения стоит в восьми местах, и менять его нужно сразу везде (и в карточке RuStore, раздел 4):
 
 - `android/app/src/main/res/values/strings.xml` → `app_name` и `title_activity_main` (это название под иконкой);
 - `capacitor.config.json` → `"appName"`;
@@ -377,7 +377,8 @@ License 1.1, текст лицензии — `fonts/OFL-NotoColorEmoji.txt`), у
 - `web-extra/webview-update.html` → `<title>` и заголовок `<h1>` (страница «обновите WebView»);
 - `docs/privacy.html` → `<title>`, шапка и текст политики конфиденциальности;
 - `docs/index.html` → `<title>`, описание и заголовок `<h1>` (страница игры на GitHub Pages);
-- `store/listing-ru.md` → название и тексты для карточки RuStore.
+- `store/listing-ru.md` → название и тексты для карточки RuStore;
+- `README.md` → заголовок и начало файла, раздел 4 (какое название вписать в карточку) и пример `PUFIK_APP` в разделе 9 (договорённость F).
 
 В HTML-файлах между «Пуфик» и тире может стоять `&nbsp;` вместо пробела: ищите «мой питомец».
 

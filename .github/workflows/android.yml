@@ -185,10 +185,11 @@ jobs:
                  --title "Тестовая сборка" --notes "$NOTES"; then
             gh release upload test dist/pufik-test.apk --clobber --repo "$GITHUB_REPOSITORY"
             gh release edit test --notes "$NOTES" --repo "$GITHUB_REPOSITORY"
-            # The tag stays on the commit the release was created from: move it, so the release's source archives match its APK.
-            gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/test" -f sha="$SHA" -F force=true > /dev/null ||
-              echo "::warning::The test tag was not moved to $SHA"
           fi
+          # The tag stays where it was first made, even when the release is deleted and made again: move it to the
+          # commit named in the notes, so the release's source archives show that commit.
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/test" -f sha="$SHA" -F force=true > /dev/null ||
+            echo "::warning::The test tag was not moved to $SHA"
 
       - name: Publish GitHub Release
         if: env.IS_RELEASE_TAG == 'true' && env.HAS_SIGNING_KEY == 'true'
