@@ -1,7 +1,9 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Пуфик</string>
-    <string name="title_activity_main">Пуфик</string>
+    <!-- The name under the icon. RuStore wants it equal to the store name; change it together with
+         appName in capacitor.config.json and pufik.appName in package.json (README.md, section 9). -->
+    <string name="app_name">Пуфик — мой питомец</string>
+    <string name="title_activity_main">Пуфик — мой питомец</string>
     <string name="package_name">ru.artem.pufik</string>
     <string name="custom_url_scheme">ru.artem.pufik</string>
 </resources>
