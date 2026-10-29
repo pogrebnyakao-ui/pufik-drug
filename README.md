@@ -146,7 +146,8 @@ Claude выдаст вам две вещи: файл **`pufik-release.jks`** и 
   - политика конфиденциальности: **https://pogrebnyakao-ui.github.io/pufik-drug/privacy.html**. Если отдельного поля для неё
     в консоли нет, укажите адрес в контактах, в поле «Веб сайт»;
   - «Безопасность данных»: ничего не отмечайте. Игра ничего не собирает и не передаёт, а оба её разрешения
-    (интернет и вибрация) RuStore относит к безопасным;
+    (интернет и вибрация) RuStore относит к безопасным. Если консоль всё же покажет служебное разрешение
+    `ru.artem.pufik.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` (раздел 9), текст для поля «Обоснование» есть в `store/listing-ru.md`;
   - в описании не должно быть ссылок: для приложений для маленьких детей RuStore это запрещает.
 - Иконка в карточке должна совпадать с иконкой на телефоне (раздел 6).
 
@@ -259,7 +260,7 @@ capacitor.config.json           appId, appName, webDir, https://localhost, Syste
 assets/                         исходники иконки и заставки для @capacitor/assets
 android/                        Android-проект (шаблон Capacitor 8.5.3 + правки ниже)
   app/build.gradle              версия из package.json, подпись из переменных окружения
-  app/src/main/AndroidManifest.xml   разрешения INTERNET и VIBRATE, бэкап выключен
+  app/src/main/AndroidManifest.xml   разрешения INTERNET и VIBRATE, бэкап выключен, WebView без метрик
   app/src/main/java/ru/artem/pufik/MainActivity.java   нативная часть
   app/src/main/res/             иконки, заставка, тема, название (values/strings.xml), правила бэкапа
   variables.gradle              minSdk / compileSdk / targetSdk (как в шаблоне)
@@ -406,6 +407,11 @@ License 1.1, текст лицензии — `fonts/OFL-NotoColorEmoji.txt`), у
 - Разрешения: `INTERNET` из шаблона и `VIBRATE`. Без `VIBRATE` WebView молча не вибрирует, а игра вызывает
   `navigator.vibrate` при касаниях, если в меню родителей включена «Вибрация». Оба разрешения обычные (normal):
   выдаются при установке без вопросов, RuStore относит их к безопасным.
+  В итоговый манифест androidx.core добавляет ещё `ru.artem.pufik.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` уровня signature:
+  без него `ContextCompat.registerReceiver(..., RECEIVER_NOT_EXPORTED)` на Android ниже 13 падает, поэтому его не убирают.
+  RuStore относит signature к чувствительным; обоснование для консоли — в `store/listing-ru.md`.
+- `android.webkit.WebView.MetricsOptOut` в манифесте: системный WebView не отправляет из приложения метрики,
+  даже если пользователь разрешил их для Android.
 
 ### Старый WebView: проверка при запуске и страница-заглушка
 
@@ -466,5 +472,7 @@ Node 22 (кэш npm) → `npm ci` → `npm run build:web` → `npx cap sync andr
 Если есть секреты: ключ декодируется во временную папку раннера и проверяется `keytool` →
 `./gradlew assembleRelease bundleRelease` (имя ключа `pufik`, пароль ключа = пароль хранилища) →
 проверка подписи `apksigner verify --print-certs` (самые новые build-tools) и `jarsigner -verify` для AAB →
-artifact `pufik-release`. На теге `v*` без секретов сборка останавливается с ошибкой; с секретами создаётся
-GitHub Release с APK и AAB (`gh release create`). Файл ключа удаляется в конце в любом случае.
+artifact `pufik-release`. С секретами, если это не тег, APK выкладывается в pre-release `test` как `pufik-test.apk`
+(файл и описание заменяются, тег `test` переносится на этот коммит). На теге `v*` без секретов сборка останавливается
+с ошибкой; с секретами создаётся GitHub Release с APK и AAB (`gh release create`), а если он уже есть, файлы в нём
+заменяются (`--clobber`). Файл ключа удаляется в конце в любом случае.

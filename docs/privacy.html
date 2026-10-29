@@ -13,7 +13,7 @@
     --card: #fffdf7;
     --ink: #4a2f17;
     --muted: #7a5a3c;
-    --accent: #c9622e;
+    --accent: #9c4518;
     --line: #f0dcc4;
     --ok: #2e7d32;
   }
@@ -53,7 +53,7 @@
   .top img { width: 56px; height: 56px; border-radius: 14px; flex: none; }
   .top span { font-weight: 800; font-size: 18px; }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 24px 20px; }
-  h1 { font-size: clamp(26px, 6vw, 34px); line-height: 1.2; margin: 0 0 8px; text-wrap: balance; }
+  h1 { font-size: clamp(22px, 6.8vw, 34px); line-height: 1.2; margin: 0 0 8px; text-wrap: balance; hyphens: auto; overflow-wrap: anywhere; }
   h2 { font-size: 21px; line-height: 1.3; margin: 32px 0 8px; }
   p, li { max-width: 68ch; }
   p { margin: 0 0 12px; }
@@ -115,6 +115,8 @@
         Сама игра интернетом не пользуется: всё, что ей нужно, находится внутри приложения. Она ничего не загружает из сети и не отправляет никаких данных, поэтому полностью работает без интернета;</li>
       <li>вибрация (<code>android.permission.VIBRATE</code>). Телефон коротко вздрагивает при некоторых касаниях, например когда малыш трясёт подарок. Вибрацию можно выключить в меню для родителей.</li>
     </ul>
+    <p>Ещё в приложении есть служебное разрешение <code>ru.artem.pufik.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION</code>. Его добавляет библиотека AndroidX, на которой собрано приложение.
+      Это разрешение уровня signature: оно защищает внутренние сообщения приложения, другим приложениям не выдаётся и доступа к данным не даёт.</p>
 
     <h2>Реклама, аналитика и покупки</h2>
     <ul>

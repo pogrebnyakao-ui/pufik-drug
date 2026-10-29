@@ -27,7 +27,7 @@
     touch-action: none;
     user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
   }
-  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; -webkit-tap-highlight-color: transparent; }
   .start {
     position: fixed; inset: 0; display: grid; place-items: center;
     padding: 16px max(16px, env(safe-area-inset-right, 0px)) 16px max(16px, env(safe-area-inset-left, 0px));
@@ -36,15 +36,16 @@
   .card {
     position: relative;
     background: var(--card); border-radius: 36px; padding: 34px 30px 26px;
-    text-align: center; max-width: 480px; width: 100%; box-shadow: 0 20px 60px #0003;
+    text-align: center; max-width: 480px; width: 100%; min-width: 0; box-shadow: 0 20px 60px #0003;
     display: grid; gap: 16px;
   }
-  .card h1 { margin: 0; font-size: clamp(40px, 9vw, 64px); font-weight: 900; line-height: 1.05; text-wrap: balance; }
+  /* a long one-word pet name wraps instead of widening the card past a narrow phone (and the gear with it) */
+  .card h1 { margin: 0; font-size: clamp(40px, 9vw, 64px); font-weight: 900; line-height: 1.05; text-wrap: balance; overflow-wrap: anywhere; }
   .card p { margin: 0; font-size: 19px; font-weight: 800; opacity: .75; text-wrap: balance; }
   .play {
     font: inherit; font-size: 40px; font-weight: 900;
     background: var(--btn); color: #fff; border: none; border-radius: 999px;
-    padding: 20px 56px; cursor: pointer; box-shadow: 0 8px 0 var(--btn-shadow); justify-self: center;
+    padding: 20px clamp(24px, 10vw, 56px); max-width: 100%; cursor: pointer; box-shadow: 0 8px 0 var(--btn-shadow); justify-self: center;
   }
   .play:active { transform: translateY(6px); box-shadow: 0 2px 0 var(--btn-shadow); }
   .play:focus-visible, .gear:focus-visible, .exit:focus-visible { outline: 5px solid var(--ink); outline-offset: 4px; }
@@ -73,6 +74,7 @@
     font-size: 13px; font-weight: 900; line-height: 15px; padding: 0 6px; border: 2px solid; border-radius: 999px; opacity: .5;
   }
   .sel { -webkit-user-select: all; user-select: all; overflow-wrap: anywhere; }
+  p .sel { display: block; word-break: break-all; } /* the policy URL: a break after one of its hyphens would read as word hyphenation */
   @supports not (height: 1dvh) { html.app .sheet { max-height: calc(100vh - 32px); } } /* WebView < 108, e.g. on Huawei (Capacitor checks no Chromium version there): the menu still scrolls */
 
   /* parent menu: ordinary readable form, this is for grown-ups */
@@ -410,6 +412,9 @@ const K = (() => {
   };
   canvas.addEventListener('pointerup', up);
   canvas.addEventListener('pointercancel', up);
+  // a click listener makes the canvas a tap target for Chromium's touch adjustment: without it, a finger tap next to «Меню»
+  // (on the edge of the ⚽ ring, say) is moved onto the button and ends the game
+  canvas.addEventListener('click', () => {});
   canvas.addEventListener('contextmenu', e => e.preventDefault());
   document.addEventListener('contextmenu', e => { if (!e.target.closest?.('.parent')) e.preventDefault(); });
   document.addEventListener('dblclick', e => e.preventDefault());
@@ -619,9 +624,11 @@ function stat(key, n) {
   const d = dayKey();
   const st = S.stats[d] || (S.stats[d] = { min: 0, feed: 0, bath: 0, sleep: 0, play: 0 });
   st[key] = (st[key] || 0) + (n || 1);
-  // keep two weeks
-  const keys = Object.keys(S.stats).sort();
-  while (keys.length > 14) delete S.stats[keys.shift()];
+  // keep two weeks: today and the 13 days before, as the privacy policy says (not the last 14 days played);
+  // a day after today is left from a clock that was wrong and goes too
+  const from = new Date(); from.setDate(from.getDate() - 13);
+  const cut = dayKey(from.getTime());
+  for (const k of Object.keys(S.stats)) if (k < cut || k > d) delete S.stats[k];
   Store.dirty();
 }
 
@@ -975,6 +982,7 @@ K.onResize = () => {
     const rs = K.clamp(Math.round(Math.min(L.btn, (H - L.barH - 20) / 4 - 12)), 48, 96);
     L.ringS = rs; L.colW = rs + 30;
     const gap = ((H - L.barH) - 4 * rs) / 5;
+    L.ringPad = K.clamp(gap, 0, 14); // a ring's tap pad stays in the gap: it must not take the next ring's rim
     L.rings = NEEDS.map((k, i) => ({ k, x: L.colW / 2 + 2, y: gap + rs / 2 + i * (rs + gap) }));
     L.R = { x: L.colW, y: 0, w: W - L.colW, h: H - L.barH };
   } else {
@@ -983,6 +991,7 @@ K.onResize = () => {
     const avail = W - 88; // the right corner is the «Меню» button's (about 60 px): a tap meant for the ⚽ ring must not land on it
     const rs = K.clamp(Math.round(avail / 4 - 14), 48, 80);
     L.ringS = rs; L.topH = rs + 20;
+    L.ringPad = K.clamp(avail / 4 - rs, 0, 14); // 10 px at 320, where rs is at its minimum
     L.rings = NEEDS.map((k, i) => ({ k, x: 8 + avail * (i + 0.5) / 4, y: 10 + rs / 2 }));
     L.R = { x: 0, y: L.topH, w: W, h: H - L.topH - L.barH };
   }
@@ -1084,7 +1093,7 @@ function drawRings() {
     const wink = v >= 40 && v < 70 && (G.now % 5200) < 220 ? 0.82 : 1;
     K.emoji(NEED_ICON[r.k], 0, 0, s * 0.46 * wink);
     ctx.restore();
-    if (K.playing) addT({ x: r.x, y: r.y, r: s / 2, pad: 14, tap() { ringTap(r.k); } });
+    if (K.playing) addT({ x: r.x, y: r.y, r: s / 2, pad: L.ringPad, tap() { ringTap(r.k); } });
   }
 }
 function ringTap(k) {

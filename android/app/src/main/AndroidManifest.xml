@@ -14,6 +14,12 @@
         android:theme="@style/AppTheme"
         tools:targetApi="31">
 
+        <!-- The system WebView sends no usage metrics from this app, even if the user allowed them for Android:
+             the game collects and sends nothing. -->
+        <meta-data
+            android:name="android.webkit.WebView.MetricsOptOut"
+            android:value="true" />
+
         <!-- adjustResize: MainActivity resizes the WebView above the keyboard
              (parent menu inputs) on every Android version, see its insets listener. -->
         <activity

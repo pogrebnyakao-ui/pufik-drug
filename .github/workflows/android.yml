@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     permissions:
-      contents: write # only used by "gh release" (test build and tags)
+      contents: write # only used by "gh release" (test build and tags) and to move the test tag
     env:
       # Secrets cannot be used in "if:" directly; this flag says whether both exist,
       # without putting the secret values into every step's environment.
@@ -185,6 +185,9 @@ jobs:
                  --title "Тестовая сборка" --notes "$NOTES"; then
             gh release upload test dist/pufik-test.apk --clobber --repo "$GITHUB_REPOSITORY"
             gh release edit test --notes "$NOTES" --repo "$GITHUB_REPOSITORY"
+            # The tag stays on the commit the release was created from: move it, so the release's source archives match its APK.
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/test" -f sha="$SHA" -F force=true > /dev/null ||
+              echo "::warning::The test tag was not moved to $SHA"
           fi
 
       - name: Publish GitHub Release
