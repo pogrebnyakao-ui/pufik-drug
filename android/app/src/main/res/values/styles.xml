@@ -24,7 +24,7 @@
 
 
     <!-- Launch theme: Android 12+ system splash = icon on pufik_background;
-         older Android shows @drawable/splash (generated later by @capacitor/assets). -->
+         older Android shows @drawable/splash (made by @capacitor/assets from assets/splash.png). -->
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <item name="android:background">@drawable/splash</item>
         <item name="windowSplashScreenBackground">@color/pufik_background</item>

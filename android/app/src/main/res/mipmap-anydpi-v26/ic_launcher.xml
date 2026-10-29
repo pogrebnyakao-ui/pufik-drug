@@ -1,6 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Placeholder until real icons are generated with @capacitor/assets (see README, "Иконка и заставка").
-     Same layout as its output, so the generator simply overwrites these files. -->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background>
         <inset android:drawable="@mipmap/ic_launcher_background" android:inset="16.7%" />

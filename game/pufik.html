@@ -348,7 +348,9 @@ const K = (() => {
     ctx.save();
     ctx.translate(x, y); if (rot) ctx.rotate(rot);
     if (alpha !== undefined) ctx.globalAlpha *= alpha;
-    ctx.font = `${size}px ${K.EMOJI}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    // a fill of its own: Chromium fades colour emoji by the alpha of a fill left from a shadow (the ⚽ was a ghost),
+    // and a plain glyph takes its colour (the ✦ stars took the night sky's gradient and never showed)
+    ctx.font = `${size}px ${K.EMOJI}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#fff';
     ctx.fillText(e, 0, size * 0.04);
     ctx.restore();
   };
@@ -2167,6 +2169,8 @@ function checkStage() {
   else if (S.stage === 'kid' && S.friendship >= 450) G.pendingStage = 'big';
 }
 function stepGrowth() {
+  // friendship in the ceremony's first half (a stroke, a treat, the gift box) re-arms the stage he is growing into: drop it
+  if (STAGES.indexOf(G.pendingStage) <= stageN()) G.pendingStage = null;
   if (!G.pendingStage || !K.playing || busy() || !pet.visible || G.trans || S.asleep || G.scene === 'mg' || G.scene === 'limit') return;
   const st = G.pendingStage; G.pendingStage = null;
   K.sfx.fanfare();
