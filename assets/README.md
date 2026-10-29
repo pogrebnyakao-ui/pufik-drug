@@ -19,3 +19,6 @@
 npx @capacitor/assets@3.0.5 generate --android --iconBackgroundColor '#fff4c9' --iconBackgroundColorDark '#fff4c9' --splashBackgroundColor '#fff4c9' --splashBackgroundColorDark '#fff4c9'
 git checkout -- android/app/src/main/AndroidManifest.xml
 ```
+
+Иконка для карточки RuStore — `store/icon-512.png` (512×512, PNG, фон на всю площадь, без прозрачных краёв),
+сделана из тех же картинок: RuStore проверяет, что она совпадает с иконкой на телефоне.
