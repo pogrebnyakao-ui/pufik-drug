@@ -15,6 +15,10 @@ android/local.properties
 *.apks
 *.idsig
 
+# Python virtual environments (the one for scripts/subset-emoji.py belongs outside the repository)
+.venv*/
+venv/
+
 # Signing keys must never be committed (they live in GitHub secrets)
 *.jks
 *.keystore

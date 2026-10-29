@@ -1,11 +1,15 @@
 {
   "appId": "ru.artem.pufik",
-  "appName": "Пуфик",
+  "appName": "Пуфик — мой питомец",
   "webDir": "www",
   "backgroundColor": "#fff4c9",
   "server": {
     "androidScheme": "https",
-    "hostname": "localhost"
+    "hostname": "localhost",
+    "errorPath": "webview-update.html"
+  },
+  "android": {
+    "minWebViewVersion": 108
   },
   "plugins": {
     "SystemBars": {

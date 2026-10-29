@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Пуфик — мой питомец</title>
+<!--
+  Shown by Capacitor instead of the game when the phone's WebView is older than
+  android.minWebViewVersion (server.errorPath in capacitor.config.json, see README.md).
+  It runs in that old WebView: plain CSS only, no script, no links, nothing loaded from outside.
+-->
+<style>
+  html { background: #fff4c9; }
+  body {
+    margin: 0; padding: 24px 16px;
+    background: #fff4c9; color: #5a3a1e;
+    font: 17px/1.45 Roboto, "Noto Sans", "Segoe UI", Arial, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  .card {
+    max-width: 540px; margin: 0 auto; padding: 24px 22px 16px;
+    background: #fff; border-radius: 28px; box-shadow: 0 12px 40px rgba(90, 58, 30, .16);
+  }
+  .pufik { position: relative; width: 84px; height: 74px; margin: 0 auto 12px; background: #ff8a4c; border-radius: 50%; }
+  .pufik i { position: absolute; top: 26px; width: 11px; height: 15px; border-radius: 50%; background: #5a3a1e; }
+  .pufik i:first-child { left: 25px; }
+  .pufik i + i { right: 25px; }
+  h1 { margin: 0 0 12px; font-size: 24px; line-height: 1.2; text-align: center; }
+  h2 { margin: 18px 0 6px; font-size: 19px; line-height: 1.25; }
+  p { margin: 8px 0; }
+  .lead { font-weight: bold; }
+  ol { margin: 6px 0; padding-left: 1.4em; }
+  li { margin: 7px 0; }
+  .note { font-size: 15px; color: #7a5a3e; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="pufik" aria-hidden="true"><i></i><i></i></div>
+  <h1>Пуфик&nbsp;— мой питомец</h1>
+  <p class="lead">Игра не может запуститься: на этом телефоне устарел встроенный компонент «Android System WebView».</p>
+  <p>Через него приложения показывают свои экраны. На некоторых телефонах вместо него работает браузер «Chrome».</p>
+  <h2>Как обновить</h2>
+  <ol>
+    <li>Откройте на телефоне магазин приложений, обычно это Google Play.</li>
+    <li>Найдите «Android System WebView» и нажмите «Обновить». Если кнопки «Обновить» там нет, найдите и обновите «Chrome».</li>
+    <li>Закройте игру совсем (смахните её из списка недавних приложений) и откройте снова.</li>
+  </ol>
+  <p class="note">На Android 7–9 этот компонент&nbsp;— сам браузер Chrome. Если Chrome выключен в настройках телефона, включите его и обновите.</p>
+  <p class="note">Если питомец уже был, он сохранён на телефоне и никуда не пропадёт.</p>
+</div>
+</body>
+</html>

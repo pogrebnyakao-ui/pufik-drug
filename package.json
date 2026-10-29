@@ -3,6 +3,12 @@
   "version": "1.0.0",
   "private": true,
   "description": "Android app (Capacitor) for the toddler game Pufik",
+  "pufik": {
+    "appName": "Пуфик — мой питомец",
+    "developer": "Артем",
+    "email": "pogrebnyakao@gmail.com",
+    "privacyUrl": "https://pogrebnyakao-ui.github.io/pufik-drug/privacy.html"
+  },
   "type": "module",
   "scripts": {
     "build:web": "node scripts/build-web.mjs",

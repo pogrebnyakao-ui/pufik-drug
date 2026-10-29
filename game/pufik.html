@@ -65,6 +65,15 @@
     font: inherit; font-size: 13px; font-weight: 800;
     background: #ffffffaa; color: var(--ink); border: none; border-radius: 999px; padding: 7px 11px; cursor: pointer;
   }
+  /* the Android app only (html.app): emoji from its own font, DOM too (the gear); the 0+ age sign; «О приложении» */
+  html.app { --font: "Nunito", "PufikEmoji", "Trebuchet MS", "Segoe UI", sans-serif; }
+  html.app .gear { font-family: var(--font); }
+  .age {
+    position: absolute; top: 10px; left: 18px; pointer-events: none;
+    font-size: 13px; font-weight: 900; line-height: 15px; padding: 0 6px; border: 2px solid; border-radius: 999px; opacity: .5;
+  }
+  .sel { -webkit-user-select: all; user-select: all; overflow-wrap: anywhere; }
+  @supports not (height: 1dvh) { html.app .sheet { max-height: calc(100vh - 32px); } } /* WebView < 108, e.g. on Huawei (Capacitor checks no Chromium version there): the menu still scrolls */
 
   /* parent menu: ordinary readable form, this is for grown-ups */
   .parent {
@@ -139,6 +148,10 @@ const K = (() => {
     onResize() {}, onFrame() {}, onStart() {}, onStop() {}, onDown() {}, onMove() {}, onUp() {},
   };
   if (K.app) startEl.querySelector('.hint').textContent = 'Выйти можно кнопкой «Меню». Шестерёнка для родителей: удерживайте её 3 секунды.';
+  // the app brings its emoji font (www/fonts/PufikEmoji.ttf, the same pictures on every Android): loaded now, drawn with as soon as it is in;
+  // and the 0+ sign of the information product on the start card
+  if (K.app) { K.EMOJI = '"PufikEmoji",' + K.EMOJI; document.documentElement.classList.add('app'); try { document.fonts.load('48px "PufikEmoji"', '🍎⭐').catch(() => {}); } catch (e) {} }
+  if (K.app) startEl.querySelector('.card').insertAdjacentHTML('beforeend', '<span class="age">0+</span>');
   K.TAU = Math.PI * 2;
   K.rand = (a, b) => a + Math.random() * (b - a);
   K.pick = arr => arr[Math.floor(Math.random() * arr.length)];
@@ -4324,7 +4337,7 @@ function renderParent() {
     <h3>Начать заново</h3>
     <div class="btns"><button class="btn danger" id="pReset">Начать заново…</button></div>
     <div id="pResetBox"></div>
-    ${K.app ? '' : `<div class="row"><span>Отладка: числа шкал и перемотка времени</span><input type="checkbox" id="pDebug" ${dbgOn ? 'checked' : ''}></div>`}
+    ${K.app ? aboutApp() : `<div class="row"><span>Отладка: числа шкал и перемотка времени</span><input type="checkbox" id="pDebug" ${dbgOn ? 'checked' : ''}></div>`}
     <div class="btns"><button class="btn main" id="pClose">Готово</button></div>`;
   const $ = id => sheet.querySelector('#' + id);
   $('pName').addEventListener('input', e => { S.name = e.target.value.trim().slice(0, 20) || 'Пуфик'; Store.dirty(); });
@@ -4364,6 +4377,16 @@ function renderParent() {
   });
   $('pDebug')?.addEventListener('change', e => { setDebug(e.target.checked); });
   $('pClose').addEventListener('click', closeParent);
+}
+// «О приложении», the app only: what RuStore wants inside the app (name, version, developer, contact, privacy, 0+). Values from
+// window.PUFIK_APP (scripts/build-web.mjs fills it from package.json), a missing one hides its row; plain text, a link would leave the game
+function aboutApp() {
+  const v = k => { try { const x = window.PUFIK_APP[k]; return typeof x === 'string' || typeof x === 'number' ? esc(String(x).trim()) : ''; } catch (e) { return ''; } };
+  const row = (t, x, c) => x ? `<div class="row"><span>${t}</span><b${c ? ` class="${c}"` : ''}>${x}</b></div>` : '';
+  return `<h3>О приложении</h3>${row('Название', v('appName'))}${row('Версия', v('version'))}${row('Разработчик', v('developer'))}${row('Почта', v('email'), 'sel')}${row('Возрастная категория', '0+')}
+    <p class="muted">Игра не собирает и никуда не передаёт данные. Питомец и рисунки хранятся только на этом устройстве и удаляются вместе с приложением. В игре нет рекламы и покупок.</p>
+    ${v('privacyUrl') ? `<p class="muted">Политика конфиденциальности: <span class="sel">${v('privacyUrl')}</span></p>` : ''}
+    <p class="muted">Шрифты Nunito и Noto Color Emoji — лицензия SIL Open Font License 1.1.</p>`;
 }
 function resetRuntime() {
   G.wish = null; G.potty = null; G.wash = null; G.box = null; G.reveal = null; G.pendingStage = null; G.k = null; G.b = null; G.mg = null;

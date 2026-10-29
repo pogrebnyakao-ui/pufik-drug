@@ -199,7 +199,7 @@ jobs:
           else
             gh release create "$GITHUB_REF_NAME" "${FILES[@]}" --repo "$GITHUB_REPOSITORY" --verify-tag \
               --title "Пуфик $VERSION" \
-              --notes "Подписанные файлы для RuStore: pufik-$VERSION.apk и pufik-$VERSION.aab (versionName $VERSION)."
+              --notes "Подписанные файлы версии $VERSION. В RuStore загружайте pufik-$VERSION.apk. pufik-$VERSION.aab — запасной файл, в RuStore его не загружайте: для AAB RuStore просит закрытый ключ подписи (README.md, раздел 4)."
           fi
 
       - name: Remove signing key
