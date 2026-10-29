@@ -132,11 +132,13 @@ const K = (() => {
   const menuBtn = document.getElementById('menu');
   const K = {
     canvas, ctx, W: 0, H: 0, playing: false, multi: false,
+    app: !!window.PUFIK_APP, paused: false, // the Android app (it keeps the screen full and on itself); paused by it
     reduce: matchMedia('(prefers-reduced-motion: reduce)').matches,
     EMOJI: '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif',
     FONT: 'Nunito, "Trebuchet MS", sans-serif',
     onResize() {}, onFrame() {}, onStart() {}, onStop() {}, onDown() {}, onMove() {}, onUp() {},
   };
+  if (K.app) startEl.querySelector('.hint').textContent = 'Выйти можно кнопкой «Меню». Шестерёнка для родителей: удерживайте её 3 секунды.';
   K.TAU = Math.PI * 2;
   K.rand = (a, b) => a + Math.random() * (b - a);
   K.pick = arr => arr[Math.floor(Math.random() * arr.length)];
@@ -182,6 +184,9 @@ const K = (() => {
   };
   A.now = () => ac ? ac.currentTime : 0;
   A.ok = () => !!ac;
+  // the page or the app went away: sound stops at once and comes back with the game (failures are ignored)
+  A.sleep = () => { try { if (ac && ac.state !== 'closed') ac.suspend().catch(() => {}); } catch (e) {} };
+  A.wake = () => { try { if (ac && ac.state !== 'closed') ac.resume().catch(() => {}); } catch (e) {} };
   function env(g, t, vol, att, dur) {
     g.gain.setValueAtTime(0.0001, t);
     g.gain.exponentialRampToValueAtTime(Math.max(0.0002, vol), t + att);
@@ -358,8 +363,8 @@ const K = (() => {
   let prev = performance.now();
   function frame(t) {
     const dt = Math.min(50, t - prev); prev = t;
-    ctx.clearRect(0, 0, K.W, K.H);
-    K.onFrame(dt, t);
+    // paused by the app: nothing moves or ticks, as in a hidden tab, so the game picks the time up the same way after it
+    if (!K.paused) { ctx.clearRect(0, 0, K.W, K.H); K.onFrame(dt, t); }
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
@@ -370,6 +375,7 @@ const K = (() => {
   const palm = e => e.pointerType === 'touch' && (e.width > 60 || e.height > 60);
   canvas.addEventListener('pointerdown', e => {
     e.preventDefault();
+    if (K.playing && ac && ac.state === 'suspended') A.wake(); // sound the browser kept off after a return needs a touch
     downs.set(e.pointerId, 1);
     if (downs.size >= 4 || palm(e)) return;
     if (!K.multi && activeId !== null) return;
@@ -395,9 +401,11 @@ const K = (() => {
 
   let wakeLock = null;
   async function start() {
-    A.init();
-    try { await document.documentElement.requestFullscreen?.(); } catch (e) {}
-    try { wakeLock = await navigator.wakeLock?.request('screen'); } catch (e) {}
+    A.init(); K.paused = false;
+    if (!K.app) {
+      try { await document.documentElement.requestFullscreen?.(); } catch (e) {}
+      try { wakeLock = await navigator.wakeLock?.request('screen'); } catch (e) {}
+    }
     startEl.hidden = true; menuBtn.hidden = false;
     K.playing = true; activeId = null; downs.clear();
     K.onStart();
@@ -407,18 +415,33 @@ const K = (() => {
     K.playing = false; startEl.hidden = false; menuBtn.hidden = true;
     if (activeId !== null) { activeId = null; K.onUp(-9999, -9999, -1); }
     downs.clear();
-    try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e) {}
-    try { wakeLock?.release(); } catch (e) {}
+    if (!K.app) {
+      try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e) {}
+      try { wakeLock?.release(); } catch (e) {}
+    }
     K.onStop();
   }
   K.start = start; K.stop = stop;
+  // the app went to the background (window.pufikApp.pause / resume): sound off and a held finger let go (what it held goes
+  // home) at once; resume brings the sound back while playing. A touch or the page showing again also resumes, so a lost
+  // resume call never leaves the game standing still
+  K.pause = () => {
+    K.paused = true; A.sleep();
+    const ids = K.multi ? [...downs.keys()] : activeId !== null ? [activeId] : [];
+    activeId = null; downs.clear();
+    for (const id of ids) K.onUp(-9999, -9999, id);
+  };
+  K.resume = () => { K.paused = false; if (K.playing) A.wake(); };
+  document.addEventListener('pointerdown', () => { if (K.paused) K.resume(); }, true);
   document.getElementById('play').addEventListener('click', start);
   menuBtn.addEventListener('click', stop);
-  document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && K.playing) stop(); });
+  document.addEventListener('fullscreenchange', () => { if (!K.app && !document.fullscreenElement && K.playing) stop(); });
   document.addEventListener('visibilitychange', async () => {
-    if (!document.hidden && K.playing) { try { wakeLock = await navigator.wakeLock?.request('screen'); } catch (e) {} }
+    if (document.hidden) { A.sleep(); return; }
+    K.resume();
+    if (!K.app && K.playing) { try { wakeLock = await navigator.wakeLock?.request('screen'); } catch (e) {} }
   });
-  addEventListener('keydown', e => { if (e.key === 'Escape' && K.playing) stop(); });
+  addEventListener('keydown', e => { if (e.key === 'Escape' && K.playing && !K.app) stop(); });
   return K;
 })();
 </script>
@@ -775,7 +798,15 @@ const pet = {
   nextIdle: 0, nextYawn: 0, flip: false, fluffUntil: 0, milkUntil: 0, sleepyUntil: 0, bounceT: -1e9,
   foam: [], cx: 0, cy: 0, r: 50, s: 1, tdx: 0, mouthX: 0, mouthY: 0, visible: false,
 };
-function act(type, dur, o) { pet.act = Object.assign({ type, t0: G.now, dur }, o || {}); }
+// an action's mid / done run exactly once: when it ends, or at once when a new action cuts it short or is turned away.
+// keep: a must-finish action (the goodbye wave, growing up) is replaced only by another keep action
+function act(type, dur, o) {
+  const n = Object.assign({ type, t0: G.now, dur }, o || {}), a = pet.act;
+  if (a && a.keep && !n.keep && G.now < a.t0 + a.dur) { actEnd(n); return; }
+  while (pet.act && !pet.act.over) actEnd(pet.act);
+  pet.act = n;
+}
+function actEnd(a) { if (a.over) return; a.over = true; if (pet.act === a) pet.act = null; if (a.mid && !a.midDone) { a.midDone = true; a.mid(); } if (a.done) a.done(); }
 function busy(type) { return !!(pet.act && G.now < pet.act.t0 + pet.act.dur && (!type || pet.act.type === type)); }
 const stageScale = () => S.stage === 'baby' ? 0.72 : S.stage === 'big' ? 1.12 : 1;
 const lowCount = () => NEEDS.filter(k => S.needs[k] < 15).length;
@@ -905,7 +936,7 @@ function updatePet(dt) {
   if (a) {
     const p = (t - a.t0) / a.dur;
     if (a.mid && p >= 0.5 && !a.midDone) { a.midDone = true; a.mid(); }
-    if (p >= 1) { pet.act = null; if (a.done) a.done(); }
+    if (p >= 1) actEnd(a);
   }
   if (!K.playing || busy() || G.scene === 'mg' || G.scene === 'limit' || S.stage === 'egg' || !pet.visible) return;
   if (t < pet.nextIdle) return;
@@ -1344,7 +1375,8 @@ SCN.kitchen = {
     const slotW = (R.w - 16 - arrowW) / 4;
     const size = K.clamp(Math.min(slotW * 0.7, shelfH * 0.68), 54, 100);
     const cookieLocked = S.cookies.n >= 2;
-    for (const id in k.items) if (!shown.some(f => f.id === id) && !k.items[id].dragging && !k.items[id].fly) delete k.items[id];
+    // the cookie that was just eaten goes too once the jar locks, or it stays at his mouth for a third one
+    for (const id in k.items) if ((!shown.some(f => f.id === id) || (id === 'cookie' && cookieLocked)) && !k.items[id].dragging && !k.items[id].fly) delete k.items[id];
     shown.forEach((f, i) => {
       const hx = R.x + 8 + slotW * (i + 0.5), hy = shelfY + shelfH / 2;
       if (f.id === 'cookie' && cookieLocked) {
@@ -1401,7 +1433,7 @@ function spoon() {
   K.sfx.chew();
   act('eat', 900, { done() {
     bump('food', 10);
-    if (k.porridge === 0) finishPorridge();
+    if (k.porridge === 0 || S.needs.food > 95) finishPorridge(); // full: the bowl leaves the table so other food can come
   } });
 }
 function finishPorridge() {
@@ -2138,7 +2170,7 @@ function stepGrowth() {
   if (!G.pendingStage || !K.playing || busy() || !pet.visible || G.trans || S.asleep || G.scene === 'mg' || G.scene === 'limit') return;
   const st = G.pendingStage; G.pendingStage = null;
   K.sfx.fanfare();
-  act('grow', 4000, {
+  act('grow', 4000, { keep: 1,
     mid() { S.stage = st; S.pendingGifts++; Store.saveNow(); K.party(); },
     done() { K.sfx.wish(); K.party(); checkStage(); },
   });
@@ -2235,7 +2267,7 @@ function startGoodbye() {
   };
   if (S.asleep || !pet.visible) { finish(); return; }
   if (G.scene === 'mg') setScene('games');
-  act('wave', 2200, { done: finish }); K.sfx.bye();
+  act('wave', 2200, { done: finish, keep: 1 }); K.sfx.bye();
 }
 SCN.limit = {
   draw() {
@@ -2678,9 +2710,9 @@ MG.sort = {
       for (let k = 0; k < Math.min(b.count, 4); k++) drawToyShape(TOY_SHAPES[(k + i) % TOY_SHAPES.length], -bw * 0.28 + k * bw * 0.19, -bh * 0.2 + (k % 2) * 8, bw * 0.09, b.c, k * 0.5);
       ctx.restore();
     });
-    // Пуфик stands in front of the wall holding the toy above his head
-    const ps = Math.min(fieldPetS() * 0.85, (floor + H * 0.14 - L.btn - 36) / 130);
-    renderPet(W / 2, floor + H * 0.16, ps, busy() ? null : { mouth: 'big' });
+    // Пуфик stands in front of the wall holding the toy above his head; the baskets take the floor below his feet
+    const feet = floor + H * 0.16, ps = Math.min(fieldPetS() * 0.85, (floor + H * 0.14 - L.btn - 36) / 130);
+    renderPet(W / 2, feet, ps, busy() ? null : { mouth: 'big' });
     petTarget();
     const holdX = pet.cx, holdY = pet.cy - pet.r * 1.2;
     if (!d.toy && !G.mg.end && now > d.nextAt) {
@@ -2695,17 +2727,18 @@ MG.sort = {
       const pop = K.easeInOut(Math.min(1, (now - t.born) / 350));
       drawToyShape(t.shape, it.x, it.y, r * (it.dragging || d.lifted ? 1.12 : 1) * (0.3 + 0.7 * pop), t.c, it.dragging ? Math.sin(now / 120) * 0.08 : 0);
       if (!G.mg.end && !it.fly) {
-        const basketAt = (x, y) => y > floor ? d.baskets.find(b => x >= b.colX && x < b.colX + b.colW) : null;
+        const basketAt = (x, y) => y > feet ? d.baskets.find(b => x >= b.colX && x < b.colX + b.colW) : null;
         const place = b => {
           if (b.c === t.c) {
             it.dragging = false;
             flyTo(it, b.x, b.y - b.h * 0.2, 320, () => { b.count++; b.hop = G.now; d.toy = null; d.left--; d.nextAt = G.now + 700; K.sfx.ding(); act('clap', 700); K.burst(b.x, b.y - b.h / 2, 22, 5, ['⭐', '✨']); if (d.left === 0) K.party(); }, 60);
           } else { b.shake = G.now; K.sfx.oops(); act('pim', 400); it.dragging = false; d.lifted = false; flyTo(it, holdX, holdY, 350, () => { it.home = true; }); }
         };
+        // columns first and the toy last, so the toy wins wherever they meet (a baby holds it low on a phone)
+        d.baskets.forEach(b => addT({ x: b.colX, y: feet, w: b.colW, h: H - feet, pad: 0, tap() { if (d.lifted) place(b); else { b.hop = G.now; K.sfx.tick(); } } }));
         addT({ x: it.x, y: it.y, r: r * 1.3, pad: 10, drag: it,
           tap() { it.home = true; d.lifted = !d.lifted; K.sfx.pop(d.lifted ? 3 : 1); },
           drop(x, y) { const b = basketAt(it.x, it.y); if (b) place(b); else sendHome(it); } });
-        d.baskets.forEach(b => addT({ x: b.colX, y: floor, w: b.colW, h: H - floor, pad: 0, tap() { if (d.lifted) place(b); else { b.hop = G.now; K.sfx.tick(); } } }));
         G.hint = { x: it.x, y: it.y };
       }
     }
@@ -4291,7 +4324,7 @@ function renderParent() {
     <h3>Начать заново</h3>
     <div class="btns"><button class="btn danger" id="pReset">Начать заново…</button></div>
     <div id="pResetBox"></div>
-    <div class="row"><span>Отладка: числа шкал и перемотка времени</span><input type="checkbox" id="pDebug" ${dbgOn ? 'checked' : ''}></div>
+    ${K.app ? '' : `<div class="row"><span>Отладка: числа шкал и перемотка времени</span><input type="checkbox" id="pDebug" ${dbgOn ? 'checked' : ''}></div>`}
     <div class="btns"><button class="btn main" id="pClose">Готово</button></div>`;
   const $ = id => sheet.querySelector('#' + id);
   $('pName').addEventListener('input', e => { S.name = e.target.value.trim().slice(0, 20) || 'Пуфик'; Store.dirty(); });
@@ -4329,12 +4362,12 @@ function renderParent() {
     $('pResetBox').innerHTML = `<p class="muted">Пуфик, его рост, вещи и статистика удалятся. Настройки тоже сбросятся.</p><div class="btns"><button class="btn danger" id="pWipe">Удалить Пуфика</button></div>`;
     $('pWipe').addEventListener('click', () => { Store.wipe(); S = Store.defaults(); resetRuntime(); Store.saveNow(); renderParent(); });
   });
-  $('pDebug').addEventListener('change', e => { setDebug(e.target.checked); });
+  $('pDebug')?.addEventListener('change', e => { setDebug(e.target.checked); });
   $('pClose').addEventListener('click', closeParent);
 }
 function resetRuntime() {
   G.wish = null; G.potty = null; G.wash = null; G.box = null; G.reveal = null; G.pendingStage = null; G.k = null; G.b = null; G.mg = null;
-  pet.act = null; pet.foam = []; G.greet = false; G.lastTick = Date.now(); S.lastSeen = Date.now();
+  pet.act = null; pet.foam = []; G.greet = false; G.goodbye = false; G.lastTick = Date.now(); S.lastSeen = Date.now();
   checkStage(); applySettings(); updateTitle();
   G.scene = 'living';
 }
@@ -4377,6 +4410,14 @@ function setDebug(on) {
   const save = () => { S.lastSeen = Date.now(); Store.saveNow(); };
   document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
   addEventListener('pagehide', save);
+  // the Android app's hooks (on the web too); each is safe at any moment and never throws
+  window.pufikApp = {
+    // true: handled here (the parent menu closed) or ignored on purpose while a child plays (the back gesture is easy
+    // to hit by accident); false on the start card, where the app may go to the background
+    back() { try { if (!parentEl.hidden) { closeParent(); return true; } return !!K.playing; } catch (e) { return true; } },
+    pause() { try { save(); } catch (e) {} try { K.pause(); } catch (e) {} },
+    resume() { try { K.resume(); } catch (e) {} },
+  };
   if (/debug/.test(location.hash)) setDebug(true);
   Store.saveNow();
 })();
