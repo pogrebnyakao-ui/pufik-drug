@@ -1,7 +1,8 @@
 # Builds the Android app on every push to main, every pull request and every tag v*.
 #
 # Always:            debug APK -> artifact "pufik-debug-apk" (for testing on a phone).
-# With signing key:  signed release APK + AAB -> artifact "pufik-release".
+# With signing key:  signed release APK + AAB -> artifact "pufik-release",
+#                    and the APK as pre-release "test" (releases/download/test/pufik-test.apk).
 # On a tag vX.Y.Z:   the same signed files are published as a GitHub Release.
 #
 # Signing key = repository secrets KEYSTORE_BASE64 (the .jks file in base64) and
@@ -25,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     permissions:
-      contents: write # only used by "gh release create" on tags
+      contents: write # only used by "gh release" (test build and tags)
     env:
       # Secrets cannot be used in "if:" directly; this flag says whether both exist,
       # without putting the secret values into every step's environment.
@@ -163,6 +164,28 @@ jobs:
             dist/pufik-${{ steps.version.outputs.version }}.apk
             dist/pufik-${{ steps.version.outputs.version }}.aab
           if-no-files-found: error
+
+      - name: Publish test build
+        # Pre-release "test" with a fixed link for installing on a phone:
+        # https://github.com/<owner>/<repo>/releases/download/test/pufik-test.apk
+        # Signed with the release key, so each test build installs over the previous one.
+        if: >-
+          env.HAS_SIGNING_KEY == 'true' && env.IS_RELEASE_TAG != 'true' &&
+          (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          cp "dist/pufik-$VERSION.apk" dist/pufik-test.apk
+          NOTES="Сборка для проверки на телефоне (версия $VERSION, коммит ${SHA:0:7}). Не загружайте её в RuStore."
+          # Created once (that sends the only notification), then only its file and notes are replaced.
+          if gh release view test --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1 ||
+             ! gh release create test dist/pufik-test.apk --repo "$GITHUB_REPOSITORY" --prerelease --target "$SHA" \
+                 --title "Тестовая сборка" --notes "$NOTES"; then
+            gh release upload test dist/pufik-test.apk --clobber --repo "$GITHUB_REPOSITORY"
+            gh release edit test --notes "$NOTES" --repo "$GITHUB_REPOSITORY"
+          fi
 
       - name: Publish GitHub Release
         if: env.IS_RELEASE_TAG == 'true' && env.HAS_SIGNING_KEY == 'true'
