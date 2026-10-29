@@ -1,0 +1,184 @@
+# Builds the Android app on every push to main, every pull request and every tag v*.
+#
+# Always:            debug APK -> artifact "pufik-debug-apk" (for testing on a phone).
+# With signing key:  signed release APK + AAB -> artifact "pufik-release".
+# On a tag vX.Y.Z:   the same signed files are published as a GitHub Release.
+#
+# Signing key = repository secrets KEYSTORE_BASE64 (the .jks file in base64) and
+# KEYSTORE_PASSWORD (store password = key password, key alias "pufik"). See README.md.
+
+name: Android
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: write # only used by "gh release create" on tags
+    env:
+      # Secrets cannot be used in "if:" directly; this flag says whether both exist,
+      # without putting the secret values into every step's environment.
+      HAS_SIGNING_KEY: ${{ secrets.KEYSTORE_BASE64 != '' && secrets.KEYSTORE_PASSWORD != '' }}
+      IS_RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    defaults:
+      run:
+        shell: bash # = bash -eo pipefail: any failing command fails the step
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Read app version from package.json
+        id: version
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Check release tag
+        if: env.IS_RELEASE_TAG == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if [ "$HAS_SIGNING_KEY" != "true" ]; then
+            echo "::error title=Нет ключа подписи::Тег $GITHUB_REF_NAME не может стать релизом: добавьте секреты репозитория KEYSTORE_BASE64 и KEYSTORE_PASSWORD (README.md, раздел «Ключ подписи»), затем удалите тег и создайте его снова."
+            exit 1
+          fi
+          if [ "$GITHUB_REF_NAME" != "v$VERSION" ]; then
+            echo "::error title=Тег не совпадает с версией::Тег $GITHUB_REF_NAME, а в package.json версия $VERSION. Тег должен быть v$VERSION: исправьте одно из двух, удалите тег и создайте его снова."
+            exit 1
+          fi
+
+      - name: Install npm packages
+        run: npm ci
+
+      - name: Build web assets (game + local fonts)
+        run: npm run build:web
+
+      - name: Copy web assets into the Android project
+        run: npx cap sync android
+
+      - name: Set up Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic # open-source cache, free for private repositories too
+
+      - name: Make gradlew executable
+        run: chmod +x android/gradlew
+
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug
+
+      - name: Name debug APK
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          mkdir -p dist
+          cp android/app/build/outputs/apk/debug/app-debug.apk "dist/pufik-$VERSION-debug.apk"
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: pufik-debug-apk
+          path: dist/pufik-${{ steps.version.outputs.version }}-debug.apk
+          if-no-files-found: error
+
+      - name: Decode signing key
+        if: env.HAS_SIGNING_KEY == 'true'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: |
+          if ! printf '%s' "$KEYSTORE_BASE64" | tr -d '[:space:]' | base64 --decode > "$RUNNER_TEMP/pufik-release.jks"; then
+            echo "::error title=Неверный KEYSTORE_BASE64::Секрет KEYSTORE_BASE64 не похож на текст base64. Создайте его заново (README.md, раздел «Ключ подписи»)."
+            exit 1
+          fi
+          if ! keytool -list -keystore "$RUNNER_TEMP/pufik-release.jks" -storepass:env KEYSTORE_PASSWORD -alias pufik > /dev/null; then
+            echo "::error title=Ключ не открывается::KEYSTORE_BASE64 и KEYSTORE_PASSWORD не открывают хранилище с ключом pufik. Проверьте оба секрета."
+            exit 1
+          fi
+
+      - name: Build signed release APK and AAB
+        if: env.HAS_SIGNING_KEY == 'true'
+        working-directory: android
+        env:
+          PUFIK_KEYSTORE_FILE: ${{ runner.temp }}/pufik-release.jks
+          PUFIK_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          PUFIK_KEY_ALIAS: pufik
+          PUFIK_KEY_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: ./gradlew assembleRelease bundleRelease
+
+      - name: Verify signatures
+        if: env.HAS_SIGNING_KEY == 'true'
+        run: |
+          SDK="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          BUILD_TOOLS="$(find "$SDK/build-tools" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort -V | tail -n 1)"
+          echo "apksigner from build-tools $BUILD_TOOLS"
+          "$SDK/build-tools/$BUILD_TOOLS/apksigner" verify --verbose --print-certs android/app/build/outputs/apk/release/app-release.apk
+          AAB_CHECK="$(jarsigner -verify android/app/build/outputs/bundle/release/app-release.aab 2>&1 || true)"
+          echo "$AAB_CHECK"
+          if ! grep -q 'jar verified' <<< "$AAB_CHECK"; then
+            echo "::error title=AAB не подписан::app-release.aab не подписан."
+            exit 1
+          fi
+
+      - name: Name release files
+        if: env.HAS_SIGNING_KEY == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          cp android/app/build/outputs/apk/release/app-release.apk "dist/pufik-$VERSION.apk"
+          cp android/app/build/outputs/bundle/release/app-release.aab "dist/pufik-$VERSION.aab"
+          sha256sum "dist/pufik-$VERSION.apk" "dist/pufik-$VERSION.aab"
+
+      - name: Upload signed release files
+        if: env.HAS_SIGNING_KEY == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: pufik-release
+          path: |
+            dist/pufik-${{ steps.version.outputs.version }}.apk
+            dist/pufik-${{ steps.version.outputs.version }}.aab
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        if: env.IS_RELEASE_TAG == 'true' && env.HAS_SIGNING_KEY == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          FILES=("dist/pufik-$VERSION.apk" "dist/pufik-$VERSION.aab")
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "${FILES[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$GITHUB_REF_NAME" "${FILES[@]}" --repo "$GITHUB_REPOSITORY" --verify-tag \
+              --title "Пуфик $VERSION" \
+              --notes "Подписанные файлы для RuStore: pufik-$VERSION.apk и pufik-$VERSION.aab (versionName $VERSION)."
+          fi
+
+      - name: Remove signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/pufik-release.jks"
