@@ -967,7 +967,7 @@ K.onResize = () => {
   } else {
     L.btn = K.clamp(Math.round(W / ROOMS.length - 8), 50, 84);
     L.barH = L.btn + 16;
-    const avail = W - 60;
+    const avail = W - 88; // the right corner is the «Меню» button's (about 60 px): a tap meant for the ⚽ ring must not land on it
     const rs = K.clamp(Math.round(avail / 4 - 14), 48, 80);
     L.ringS = rs; L.topH = rs + 20;
     L.rings = NEEDS.map((k, i) => ({ k, x: 8 + avail * (i + 0.5) / 4, y: 10 + rs / 2 }));
