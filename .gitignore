@@ -1,0 +1,29 @@
+# Dependencies (restored by "npm ci")
+node_modules/
+
+# Web build output (made by "npm run build:web" from game/pufik.html)
+www/
+
+# Android build outputs. android/.gitignore (from the Capacitor template) ignores
+# the rest: copied web assets, generated config files, Cordova plugin project.
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+*.apk
+*.aab
+*.apks
+*.idsig
+
+# Signing keys must never be committed (they live in GitHub secrets)
+*.jks
+*.keystore
+*.p12
+*.b64
+
+# Editors and OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db

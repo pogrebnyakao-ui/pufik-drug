@@ -1,0 +1,17 @@
+{
+  "appId": "ru.artem.pufik",
+  "appName": "Пуфик",
+  "webDir": "www",
+  "backgroundColor": "#fff4c9",
+  "server": {
+    "androidScheme": "https",
+    "hostname": "localhost"
+  },
+  "plugins": {
+    "SystemBars": {
+      "insetsHandling": "disable",
+      "hidden": true,
+      "style": "LIGHT"
+    }
+  }
+}
